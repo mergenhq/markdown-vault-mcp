@@ -6,9 +6,9 @@ USER root
 ENV VENV=/app/.venv
 ENV PY=${VENV}/bin/python3
 
-# 1. Update fork deps (fastmcp_pvl_core etc) in the venv.
+# 1. Update fork deps (fastmcp_pvl_core etc) + contextual enrichment (anthropic) in the venv.
 COPY . /app/fork/
-RUN uv pip install --python ${PY} "/app/fork/[mcp,embeddings]"
+RUN uv pip install --python ${PY} "/app/fork/[mcp,embeddings,contextual]"
 
 # 2. Install reranker deps (CPU-only torch).
 RUN uv pip install --python ${PY} torch \
