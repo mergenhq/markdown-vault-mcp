@@ -1,4 +1,4 @@
-FROM ghcr.io/pvliesdonk/markdown-vault-mcp:v1.9.0
+FROM ghcr.io/pvliesdonk/markdown-vault-mcp:latest
 
 USER root
 
