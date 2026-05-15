@@ -1,0 +1,21 @@
+FROM ghcr.io/pvliesdonk/markdown-vault-mcp:v1.9.0
+
+USER root
+
+# Install CPU-only torch first (avoid CUDA bloat), then sentence-transformers
+RUN pip install --no-cache-dir torch \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir "sentence-transformers>=3.0"
+
+# Copy modified source files (reranker + contextual enricher + wiring)
+COPY src/markdown_vault_mcp/reranker.py \
+     src/markdown_vault_mcp/contextual_enricher.py \
+     src/markdown_vault_mcp/fts_index.py \
+     src/markdown_vault_mcp/config.py \
+     src/markdown_vault_mcp/collection.py \
+     /app/src/markdown_vault_mcp/
+
+COPY src/markdown_vault_mcp/managers/search.py \
+     /app/src/markdown_vault_mcp/managers/
+
+USER appuser
