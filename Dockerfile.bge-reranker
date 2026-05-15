@@ -2,13 +2,14 @@ FROM ghcr.io/pvliesdonk/markdown-vault-mcp:latest
 
 USER root
 
-# Install CPU-only torch first (avoid CUDA bloat), then sentence-transformers
+# Install reranker dependencies (CPU-only torch)
 RUN pip install --no-cache-dir torch \
         --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir "sentence-transformers>=3.0"
 
-# Copy full source (v1.9.0 base + v1.28.0 fork = version mismatch on selective copy).
-# Full src/ copy ensures type consistency (BacklinkInfo etc).
-COPY src/markdown_vault_mcp/ /app/src/markdown_vault_mcp/
+# Copy fork and reinstall — updates fastmcp_pvl_core + all deps to match fork version.
+# This is the safest way to avoid source/package version skew.
+COPY . /app/fork/
+RUN pip install --no-cache-dir "/app/fork/[mcp,embeddings]"
 
 USER appuser
