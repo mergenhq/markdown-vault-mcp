@@ -317,6 +317,7 @@ class SearchManager:
         chunks_per_file: int = 2,
         snippet_words: int = 200,
         length_downweight_alpha: float = 0.25,
+        reranker: Any | None = None,
     ) -> None:
         self._fts = fts
         self._source_dir = source_dir
@@ -331,6 +332,8 @@ class SearchManager:
         self._chunks_per_file = chunks_per_file
         self._snippet_words = snippet_words
         self._length_downweight_alpha = length_downweight_alpha
+        # Optional post-retrieval reranker (e.g. BGE cross-encoder).
+        self._reranker = reranker
 
         # Vector index is loaded lazily (only if embeddings_path is set).
         self._vectors: VectorIndex | None = None
@@ -540,37 +543,46 @@ class SearchManager:
         )
         eff_snip = snippet_words if snippet_words is not None else self._snippet_words
 
-        if mode == "keyword":
-            return self._keyword_search(
-                query,
-                limit=limit,
-                filters=filters,
-                folder=folder,
-                chunks_per_file=eff_cap,
-                snippet_words=eff_snip,
-            )
-
-        if mode == "semantic":
-            self._require_vectors()
-            return self._semantic_search(
-                query,
-                limit=limit,
-                filters=filters,
-                folder=folder,
-                chunks_per_file=eff_cap,
-                snippet_words=eff_snip,
-            )
-
-        # hybrid
-        self._require_vectors()
-        return self._hybrid_search(
-            query,
-            limit=limit,
-            filters=filters,
-            folder=folder,
-            chunks_per_file=eff_cap,
-            snippet_words=eff_snip,
+        # When a reranker is active, retrieve a larger candidate pool first.
+        candidate_limit = (
+            self._reranker.candidate_limit if self._reranker is not None else limit
         )
+
+        if mode == "keyword":
+            results = self._keyword_search(
+                query,
+                limit=candidate_limit,
+                filters=filters,
+                folder=folder,
+                chunks_per_file=eff_cap,
+                snippet_words=eff_snip,
+            )
+        elif mode == "semantic":
+            self._require_vectors()
+            results = self._semantic_search(
+                query,
+                limit=candidate_limit,
+                filters=filters,
+                folder=folder,
+                chunks_per_file=eff_cap,
+                snippet_words=eff_snip,
+            )
+        else:
+            # hybrid
+            self._require_vectors()
+            results = self._hybrid_search(
+                query,
+                limit=candidate_limit,
+                filters=filters,
+                folder=folder,
+                chunks_per_file=eff_cap,
+                snippet_words=eff_snip,
+            )
+
+        if self._reranker is not None:
+            results = self._reranker.rerank(query, results, top_n=limit)
+
+        return results
 
     def _keyword_search(
         self,

@@ -44,7 +44,8 @@ mcp = ["fastmcp>=3.0,<4"]
 embeddings-api = ["httpx>=0.25", "numpy>=1.20"]
 embeddings = ["fastembed>=0.3", "numpy>=1.20"]
 contextual = ["anthropic>=0.40"]
-all = ["fastmcp>=3.0,<4", "httpx>=0.25", "fastembed>=0.3", "numpy>=1.20", "anthropic>=0.40"]
+reranker = ["sentence-transformers>=3.0", "torch>=2.0"]
+all = ["fastmcp>=3.0,<4", "httpx>=0.25", "fastembed>=0.3", "numpy>=1.20", "anthropic>=0.40", "sentence-transformers>=3.0", "torch>=2.0"]
 # Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
 # version range is inherited from the [project] dependency on
 # fastmcp-pvl-core above; pip resolves a single, consistent version.

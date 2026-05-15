@@ -151,6 +151,7 @@ class Collection:
         length_downweight_alpha: float = 0.25,
         max_chunk_words: int = 400,
         contextual_enricher: Any | None = None,
+        reranker: Any | None = None,
     ) -> None:
         self._source_dir = source_dir
         self._index_path = index_path
@@ -180,6 +181,7 @@ class Collection:
         self._max_attachment_size_mb = max_attachment_size_mb
         self._max_note_read_bytes = max_note_read_bytes
         self._contextual_enricher = contextual_enricher
+        self._reranker = reranker
 
         # Default state path: {source_dir}/.markdown_vault_mcp/state.json
         if state_path is None:
@@ -255,6 +257,7 @@ class Collection:
             chunks_per_file=chunks_per_file,
             snippet_words=snippet_words,
             length_downweight_alpha=length_downweight_alpha,
+            reranker=self._reranker,
         )
         # 4. DocumentManager (needs index_mgr callbacks)
         self._doc_mgr = DocumentManager(

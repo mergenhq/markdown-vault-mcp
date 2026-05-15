@@ -214,6 +214,12 @@ class CollectionConfig:
     length_downweight_alpha: float = 0.25
     max_chunk_words: int = 400
 
+    # BGE cross-encoder reranker (post-retrieval)
+    reranker_enabled: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_device: str = "cpu"
+    reranker_candidate_limit: int = 50
+
     # Contextual retrieval enrichment (Anthropic spec, September 2024)
     contextual_enrichment: bool = False
     anthropic_api_key: str | None = None
@@ -266,6 +272,23 @@ class CollectionConfig:
             "length_downweight_alpha": self.length_downweight_alpha,
             "max_chunk_words": self.max_chunk_words,
         }
+
+        # Resolve reranker if enabled.
+        if self.reranker_enabled:
+            try:
+                from markdown_vault_mcp.reranker import Reranker
+
+                kwargs["reranker"] = Reranker(
+                    model_name=self.reranker_model,
+                    device=self.reranker_device,
+                    candidate_limit=self.reranker_candidate_limit,
+                )
+                logger.info("load_config: reranker initialised (%s)", self.reranker_model)
+            except ImportError:
+                logger.warning(
+                    "reranker enabled but sentence-transformers not installed; "
+                    "skipping reranker"
+                )
 
         # Resolve contextual enricher if enabled.
         if self.contextual_enrichment and self.anthropic_api_key:
@@ -816,6 +839,25 @@ def load_config() -> CollectionConfig:
         raise ValueError(f"max_chunk_words must be >= 1, got {max_chunk_words}")
     logger.debug("load_config: max_chunk_words=%s", max_chunk_words)
 
+    # --- BGE Reranker ---
+    raw_reranker = _env("RERANKER_ENABLED")
+    reranker_enabled: bool = (
+        _parse_bool(raw_reranker) if raw_reranker is not None else False
+    )
+    raw_reranker_model = (_env("RERANKER_MODEL") or "").strip()
+    reranker_model: str = raw_reranker_model or "BAAI/bge-reranker-v2-m3"
+    raw_reranker_device = (_env("RERANKER_DEVICE") or "").strip()
+    reranker_device: str = raw_reranker_device or "cpu"
+    raw_reranker_cand = (_env("RERANKER_CANDIDATE_LIMIT") or "").strip()
+    reranker_candidate_limit: int = int(raw_reranker_cand) if raw_reranker_cand else 50
+    if reranker_enabled:
+        logger.info(
+            "load_config: reranker enabled (model=%s, device=%s, candidates=%d)",
+            reranker_model,
+            reranker_device,
+            reranker_candidate_limit,
+        )
+
     # --- Contextual enrichment ---
     raw_contextual = _env("CONTEXTUAL_ENRICHMENT")
     contextual_enrichment: bool = (
@@ -882,6 +924,10 @@ def load_config() -> CollectionConfig:
         snippet_words=snippet_words,
         length_downweight_alpha=length_downweight_alpha,
         max_chunk_words=max_chunk_words,
+        reranker_enabled=reranker_enabled,
+        reranker_model=reranker_model,
+        reranker_device=reranker_device,
+        reranker_candidate_limit=reranker_candidate_limit,
         contextual_enrichment=contextual_enrichment,
         anthropic_api_key=anthropic_api_key,
         contextual_enrichment_model=contextual_enrichment_model,
