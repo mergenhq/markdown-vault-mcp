@@ -7,9 +7,10 @@ RUN pip install --no-cache-dir torch \
         --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir "sentence-transformers>=3.0"
 
-# Copy fork and reinstall — updates fastmcp_pvl_core + all deps to match fork version.
-# This is the safest way to avoid source/package version skew.
+# Update deps to fork version (fastmcp_pvl_core etc), then overwrite /app/src with fork source.
+# /app/src is earlier in sys.path than site-packages — must update source in-place.
 COPY . /app/fork/
-RUN pip install --no-cache-dir "/app/fork/[mcp,embeddings]"
+RUN pip install --no-cache-dir "/app/fork/[mcp,embeddings]" && \
+    cp -r /app/fork/src/markdown_vault_mcp/. /app/src/markdown_vault_mcp/
 
 USER appuser
