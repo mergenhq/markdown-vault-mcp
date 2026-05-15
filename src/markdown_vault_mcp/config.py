@@ -213,6 +213,12 @@ class CollectionConfig:
     snippet_words: int = 200
     length_downweight_alpha: float = 0.25
     max_chunk_words: int = 400
+
+    # Contextual retrieval enrichment (Anthropic spec, September 2024)
+    contextual_enrichment: bool = False
+    anthropic_api_key: str | None = None
+    contextual_enrichment_model: str = "claude-haiku-4-5-20251001"
+    contextual_enrichment_language: str = "Turkish"
     # CONFIG-FIELDS-END
 
     # Universal server fields delegated to fastmcp_pvl_core.ServerConfig.
@@ -260,6 +266,23 @@ class CollectionConfig:
             "length_downweight_alpha": self.length_downweight_alpha,
             "max_chunk_words": self.max_chunk_words,
         }
+
+        # Resolve contextual enricher if enabled.
+        if self.contextual_enrichment and self.anthropic_api_key:
+            try:
+                from markdown_vault_mcp.contextual_enricher import ContextualEnricher
+
+                kwargs["contextual_enricher"] = ContextualEnricher(
+                    api_key=self.anthropic_api_key,
+                    model=self.contextual_enrichment_model,
+                    language_hint=self.contextual_enrichment_language,
+                )
+                logger.info("load_config: contextual enricher initialised")
+            except ImportError:
+                logger.warning(
+                    "contextual enrichment enabled but anthropic package not installed; "
+                    "skipping enrichment"
+                )
 
         # Resolve embedding provider if embeddings_path is configured.
         # ValueError propagates — it means the user set an invalid provider
@@ -793,6 +816,25 @@ def load_config() -> CollectionConfig:
         raise ValueError(f"max_chunk_words must be >= 1, got {max_chunk_words}")
     logger.debug("load_config: max_chunk_words=%s", max_chunk_words)
 
+    # --- Contextual enrichment ---
+    raw_contextual = _env("CONTEXTUAL_ENRICHMENT")
+    contextual_enrichment: bool = (
+        _parse_bool(raw_contextual) if raw_contextual is not None else False
+    )
+    raw_anthropic_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+    anthropic_api_key: str | None = raw_anthropic_key or None
+    raw_ctx_model = (_env("CONTEXTUAL_ENRICHMENT_MODEL") or "").strip()
+    contextual_enrichment_model: str = raw_ctx_model or "claude-haiku-4-5-20251001"
+    raw_ctx_lang = (_env("CONTEXTUAL_ENRICHMENT_LANGUAGE") or "").strip()
+    contextual_enrichment_language: str = raw_ctx_lang or "Turkish"
+    if contextual_enrichment:
+        logger.info(
+            "load_config: contextual enrichment enabled (model=%s, lang=%s, api_key=%s)",
+            contextual_enrichment_model,
+            contextual_enrichment_language,
+            "set" if anthropic_api_key else "NOT SET — enrichment will fail",
+        )
+
     return CollectionConfig(
         # CONFIG-FROM-ENV-START — domain fields populated from env; kept across copier update
         source_dir=source_dir,
@@ -840,6 +882,10 @@ def load_config() -> CollectionConfig:
         snippet_words=snippet_words,
         length_downweight_alpha=length_downweight_alpha,
         max_chunk_words=max_chunk_words,
+        contextual_enrichment=contextual_enrichment,
+        anthropic_api_key=anthropic_api_key,
+        contextual_enrichment_model=contextual_enrichment_model,
+        contextual_enrichment_language=contextual_enrichment_language,
         # CONFIG-FROM-ENV-END
         server=ServerConfig.from_env(_ENV_PREFIX),
     )

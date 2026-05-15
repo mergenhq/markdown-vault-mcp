@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any
 from markdown_vault_mcp.types import FTSResult, ParsedNote
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
+
+    from markdown_vault_mcp.types import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -266,10 +268,15 @@ class FTSIndex:
         self,
         db_path: Path | str = ":memory:",
         indexed_frontmatter_fields: list[str] | None = None,
+        content_enricher: "Callable[[ParsedNote, Chunk], str] | None" = None,
     ) -> None:
         self._db_path = db_path
         self._indexed_fields: list[str] = indexed_frontmatter_fields or []
         self._conn = _open_connection(db_path)
+        # Optional per-chunk content enricher (e.g. contextual retrieval).
+        # Called with (note, chunk) during _insert_sections; return value
+        # replaces chunk.content in notes_fts only — sections table keeps original.
+        self._content_enricher = content_enricher
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -345,6 +352,13 @@ class FTSIndex:
                     chunk.start_line,
                 ),
             )
+            # Enrich FTS content if an enricher is configured.
+            # sections table always stores the original content for display;
+            # notes_fts gets the enriched version for improved retrieval.
+            if self._content_enricher is not None:
+                fts_content = self._content_enricher(note, chunk)
+            else:
+                fts_content = chunk.content
             cur.execute(
                 """
                 INSERT INTO notes_fts (path, title, folder, heading, content)
@@ -355,7 +369,7 @@ class FTSIndex:
                     note.title,
                     folder,
                     chunk.heading or "",
-                    chunk.content,
+                    fts_content,
                 ),
             )
 

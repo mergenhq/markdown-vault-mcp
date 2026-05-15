@@ -150,6 +150,7 @@ class Collection:
         snippet_words: int = 200,
         length_downweight_alpha: float = 0.25,
         max_chunk_words: int = 400,
+        contextual_enricher: Any | None = None,
     ) -> None:
         self._source_dir = source_dir
         self._index_path = index_path
@@ -178,6 +179,7 @@ class Collection:
         self._attachment_extensions = attachment_extensions
         self._max_attachment_size_mb = max_attachment_size_mb
         self._max_note_read_bytes = max_note_read_bytes
+        self._contextual_enricher = contextual_enricher
 
         # Default state path: {source_dir}/.markdown_vault_mcp/state.json
         if state_path is None:
@@ -189,9 +191,16 @@ class Collection:
 
         # Sub-module construction.
         db_path: Path | str = index_path if index_path is not None else ":memory:"
+        # Wire up contextual enricher if provided.
+        _enricher_fn = (
+            self._contextual_enricher.enrich
+            if self._contextual_enricher is not None
+            else None
+        )
         self._fts = FTSIndex(
             db_path=db_path,
             indexed_frontmatter_fields=self._indexed_frontmatter_fields or None,
+            content_enricher=_enricher_fn,
         )
         self._tracker = ChangeTracker(self._state_path)
 
