@@ -2,17 +2,20 @@ FROM ghcr.io/pvliesdonk/markdown-vault-mcp:latest
 
 USER root
 
-# CLI uses /app/.venv — install everything into venv explicitly.
-# 1. Update fork deps (fastmcp_pvl_core etc) inside the venv.
+# uv manages the venv — use it for installs.
+ENV VENV=/app/.venv
+ENV PY=${VENV}/bin/python3
+
+# 1. Update fork deps (fastmcp_pvl_core etc) in the venv.
 COPY . /app/fork/
-RUN /app/.venv/bin/pip install --no-cache-dir "/app/fork/[mcp,embeddings]"
+RUN uv pip install --python ${PY} "/app/fork/[mcp,embeddings]"
 
-# 2. Install reranker deps into venv (CPU-only torch to keep image lean).
-RUN /app/.venv/bin/pip install --no-cache-dir torch \
+# 2. Install reranker deps (CPU-only torch).
+RUN uv pip install --python ${PY} torch \
         --index-url https://download.pytorch.org/whl/cpu && \
-    /app/.venv/bin/pip install --no-cache-dir "sentence-transformers>=3.0"
+    uv pip install --python ${PY} "sentence-transformers>=3.0"
 
-# 3. Overwrite /app/src with fork source (sys.path priority: /app/src before site-packages).
+# 3. Overwrite /app/src with fork source.
 RUN cp -r /app/fork/src/markdown_vault_mcp/. /app/src/markdown_vault_mcp/
 
 USER appuser
