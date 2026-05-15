@@ -2,15 +2,17 @@ FROM ghcr.io/pvliesdonk/markdown-vault-mcp:latest
 
 USER root
 
-# Install reranker dependencies (CPU-only torch)
-RUN pip install --no-cache-dir torch \
-        --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir "sentence-transformers>=3.0"
-
-# Update deps to fork version (fastmcp_pvl_core etc), then overwrite /app/src with fork source.
-# /app/src is earlier in sys.path than site-packages — must update source in-place.
+# CLI uses /app/.venv — install everything into venv explicitly.
+# 1. Update fork deps (fastmcp_pvl_core etc) inside the venv.
 COPY . /app/fork/
-RUN pip install --no-cache-dir "/app/fork/[mcp,embeddings]" && \
-    cp -r /app/fork/src/markdown_vault_mcp/. /app/src/markdown_vault_mcp/
+RUN /app/.venv/bin/pip install --no-cache-dir "/app/fork/[mcp,embeddings]"
+
+# 2. Install reranker deps into venv (CPU-only torch to keep image lean).
+RUN /app/.venv/bin/pip install --no-cache-dir torch \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    /app/.venv/bin/pip install --no-cache-dir "sentence-transformers>=3.0"
+
+# 3. Overwrite /app/src with fork source (sys.path priority: /app/src before site-packages).
+RUN cp -r /app/fork/src/markdown_vault_mcp/. /app/src/markdown_vault_mcp/
 
 USER appuser
