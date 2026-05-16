@@ -51,6 +51,7 @@ from ._server_deps import make_collection_lifespan
 from ._server_prompts import register_prompts
 from ._server_resources import register_resources
 from ._server_tools import register_tools
+from .graph_tools import register_graph_tools
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +213,7 @@ def make_server(transport: str = "stdio") -> FastMCP:
     register_tools(mcp, transport=transport)
     register_resources(mcp)
     register_apps(mcp)
+    register_graph_tools(mcp)
     register_prompts(
         mcp,
         templates_folder=config.templates_folder,
