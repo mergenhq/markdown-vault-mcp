@@ -1,6 +1,6 @@
 [project]
 name = "markdown-vault-mcp"
-version = "1.28.0"
+version = "2.0.0"
 description = "Generic markdown vault MCP server with FTS5 + semantic search"
 readme = "README.md"
 license = "MIT"  # project-owned — keep across copier updates
@@ -35,6 +35,7 @@ dependencies = [
     # PROJECT-DEPS-START — add domain dependencies below; kept across copier update
     "python-frontmatter>=1.0",
     "requests>=2.33.0",
+    "lightrag-hku>=1.4.16,<2.0",
     # PROJECT-DEPS-END
 ]
 
@@ -43,7 +44,7 @@ dependencies = [
 mcp = ["fastmcp>=3.0,<4"]
 embeddings-api = ["httpx>=0.25", "numpy>=1.20"]
 embeddings = ["fastembed>=0.3", "numpy>=1.20"]
-all = ["fastmcp>=3.0,<4", "httpx>=0.25", "fastembed>=0.3", "numpy>=1.20"]
+all = ["fastmcp>=3.0,<4", "httpx>=0.25", "fastembed>=0.3", "numpy>=1.20", "lightrag-hku>=1.4.16,<2.0"]
 # Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
 # version range is inherited from the [project] dependency on
 # fastmcp-pvl-core above; pip resolves a single, consistent version.
