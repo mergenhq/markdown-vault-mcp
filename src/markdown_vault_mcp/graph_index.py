@@ -81,13 +81,13 @@ class GraphIndex:
             from lightrag.llm.openai import openai_embedding  # fallback
 
             async def _anthropic_llm(prompt: str, system_prompt: str | None = None, **kw: Any) -> str:
-                return await anthropic_complete(
-                    prompt,
+                from lightrag.llm.anthropic import anthropic_complete_if_cache
+                return await anthropic_complete_if_cache(
+                    model=self._llm_model,
+                    prompt=prompt,
                     system_prompt=system_prompt,
-                    hashing_kv=kw.get("hashing_kv"),
-                    llm_model_name=self._llm_model,
                     api_key=self._api_key,
-                    **{k: v for k, v in kw.items() if k not in ("hashing_kv",)},
+                    **{k: v for k, v in kw.items() if k not in ("hashing_kv", "keyword_extraction")},
                 )
 
             self._rag = LightRAG(
