@@ -95,16 +95,48 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         )
     if transport == "http":
         import uvicorn
+        from starlette.applications import Starlette
+        from starlette.routing import Mount
+
+        from markdown_vault_mcp.oauth_provider import (
+            DualAuthMiddleware,
+            build_oauth_provider,
+        )
 
         config = load_config()
         event_store = build_event_store(config.event_store_url)
         # FastMCP's run() doesn't pass event_store through to http_app(),
         # so we build the ASGI app and run uvicorn directly.
-        app = server.http_app(
+        mcp_app = server.http_app(
             path=http_path,
             transport="http",
             event_store=event_store,
         )
+
+        # Build OAuth provider (disabled if OAUTH_JWT_SECRET not set).
+        oauth = build_oauth_provider(env_prefix=_ENV_PREFIX, mcp_path=http_path)
+        if oauth is not None:
+            static_bearer = (os.environ.get(f"{_ENV_PREFIX}_BEARER_TOKEN") or "").strip() or None
+            # Wrap /mcp with dual-auth middleware (static Bearer OR OAuth JWT).
+            protected_app = DualAuthMiddleware(
+                mcp_app,
+                provider=oauth,
+                static_bearer=static_bearer,
+                mcp_path_prefix=http_path,
+            )
+            # Combine OAuth endpoints + protected MCP app.
+            app = Starlette(
+                routes=[
+                    Mount("/auth", app=oauth.make_auth_app()),
+                    Mount("/.well-known", app=oauth.make_well_known_app()),
+                    Mount("/", app=protected_app),
+                ]
+            )
+            logger.info("OAuth 2.1 enabled: issuer=%s", oauth._issuer)
+        else:
+            app = mcp_app
+            logger.info("OAuth disabled (OAUTH_JWT_SECRET not set) — Bearer-only mode")
+
         uvicorn.run(
             app,
             host=args.host,
