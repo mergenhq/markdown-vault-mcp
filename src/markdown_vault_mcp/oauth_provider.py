@@ -522,17 +522,24 @@ class DualAuthMiddleware:
 
     def _check_auth(self, scope: dict) -> str:
         """Returns 'static', 'jwt', or 'deny'."""
-        headers = dict(scope.get("headers", []))
-        auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
+        raw_headers = scope.get("headers", [])
+        auth = ""
+        for name, value in raw_headers:
+            if name.lower() == b"authorization":
+                auth = value.decode("utf-8", errors="replace")
+                break
         if not auth.lower().startswith("bearer "):
+            logger.debug("OAuth: no Bearer header on %s", scope.get("path", "?"))
             return "deny"
         token = auth[7:].strip()
         if self.provider.is_static_bearer(token):
+            logger.debug("OAuth: static Bearer accepted")
             return "static"
         claims = self.provider.validate_jwt(token)
         if claims is not None:
             logger.debug("OAuth: JWT auth accepted sub=%s", claims.get("sub"))
             return "jwt"
+        logger.debug("OAuth: token rejected (not static Bearer, not valid JWT)")
         return "deny"
 
     async def _send_401(self, scope: dict, receive: Any, send: Any) -> None:
@@ -540,19 +547,12 @@ class DualAuthMiddleware:
             error="invalid_token",
             description="Valid Bearer or OAuth JWT required",
         )
-        await send({
-            "type": "http.response.start",
-            "status": 401,
-            "headers": [
-                [b"www-authenticate", www_auth.encode()],
-                [b"content-type", b"application/json"],
-                [b"content-length", b"53"],
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": b'{"error":"invalid_token","error_description":"Unauthorized"}',
-        })
+        response = JSONResponse(
+            {"error": "invalid_token", "error_description": "Unauthorized"},
+            status_code=401,
+            headers={"WWW-Authenticate": www_auth},
+        )
+        await response(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------

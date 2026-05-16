@@ -116,21 +116,39 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         # Build OAuth provider (disabled if OAUTH_JWT_SECRET not set).
         oauth = build_oauth_provider(env_prefix=_ENV_PREFIX, mcp_path=http_path)
         if oauth is not None:
+            from contextlib import asynccontextmanager
+
             static_bearer = (os.environ.get(f"{_ENV_PREFIX}_BEARER_TOKEN") or "").strip() or None
+
             # Wrap /mcp with dual-auth middleware (static Bearer OR OAuth JWT).
-            protected_app = DualAuthMiddleware(
+            protected_mcp = DualAuthMiddleware(
                 mcp_app,
                 provider=oauth,
                 static_bearer=static_bearer,
                 mcp_path_prefix=http_path,
             )
+
+            # Propagate FastMCP's lifespan (StreamableHTTPSessionManager) to the
+            # outer Starlette app so the task group is initialised before requests.
+            inner_lifespan = getattr(mcp_app, "router", None)
+            inner_lifespan = getattr(inner_lifespan, "lifespan_context", None)
+
+            @asynccontextmanager
+            async def _combined_lifespan(app_: Starlette):  # type: ignore[no-untyped-def]
+                if inner_lifespan is not None:
+                    async with inner_lifespan(mcp_app):
+                        yield
+                else:
+                    yield
+
             # Combine OAuth endpoints + protected MCP app.
             app = Starlette(
+                lifespan=_combined_lifespan,
                 routes=[
                     Mount("/auth", app=oauth.make_auth_app()),
                     Mount("/.well-known", app=oauth.make_well_known_app()),
-                    Mount("/", app=protected_app),
-                ]
+                    Mount("/", app=protected_mcp),
+                ],
             )
             logger.info("OAuth 2.1 enabled: issuer=%s", oauth._issuer)
         else:
