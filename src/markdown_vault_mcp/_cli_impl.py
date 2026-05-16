@@ -107,10 +107,14 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         event_store = build_event_store(config.event_store_url)
         # FastMCP's run() doesn't pass event_store through to http_app(),
         # so we build the ASGI app and run uvicorn directly.
+        # stateless_http=True: no session management required.
+        # Clients (claude.ai Web connector) don't send GET /mcp SSE streams;
+        # stateless mode returns all responses inline (200 OK) without 202 Accepted.
         mcp_app = server.http_app(
             path=http_path,
             transport="http",
             event_store=event_store,
+            stateless_http=True,
         )
 
         # Build OAuth provider (disabled if OAUTH_JWT_SECRET not set).
