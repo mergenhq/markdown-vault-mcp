@@ -1,12 +1,12 @@
 """BGE Cross-Encoder reranker for post-retrieval score improvement.
 
-Applies a cross-encoder model (BAAI/bge-reranker-v2-m3 by default) to
+Applies a cross-encoder model (BAAI/bge-reranker-base by default) to
 re-score search results after initial retrieval.  The reranker evaluates
 (query, chunk) pairs jointly — capturing deeper relevance signals than
 bi-encoder vector search or BM25 alone.
 
 Expected improvement: ~27% precision gain (Anthropic / BEIR benchmarks).
-Supports multilingual vaults including Turkish (bge-reranker-v2-m3).
+bge-reranker-base (110M params) chosen for CPU production viability (~50ms/query).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
+_DEFAULT_MODEL = "BAAI/bge-reranker-base"
 _DEFAULT_CANDIDATE_LIMIT = 50  # retrieve this many before reranking
 
 
