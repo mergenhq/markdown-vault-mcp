@@ -80,25 +80,48 @@ class GraphIndex:
             # (separate from vault-mcp's e5-large for FTS)
             from lightrag.llm.openai import openai_embedding  # fallback
 
+            from anthropic import AsyncAnthropic
+            _aclient = AsyncAnthropic(api_key=self._api_key)
+            _model = self._llm_model
+
             async def _anthropic_llm(prompt: str, system_prompt: str | None = None, **kw: Any) -> str:
-                from lightrag.llm.anthropic import anthropic_complete_if_cache
-                return await anthropic_complete_if_cache(
-                    model=self._llm_model,
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    api_key=self._api_key,
-                    **{k: v for k, v in kw.items() if k not in ("hashing_kv", "keyword_extraction")},
-                )
+                # Pop LightRAG-internal kwargs the Anthropic SDK doesn't accept
+                history_messages = list(kw.pop("history_messages", None) or [])
+                for k in ("hashing_kv", "keyword_extraction", "stream", "_priority", "enable_cot"):
+                    kw.pop(k, None)
+                if "max_tokens" not in kw:
+                    kw["max_tokens"] = 4096
+                messages: list[dict] = history_messages + [{"role": "user", "content": prompt}]
+                params: dict[str, Any] = {"model": _model, "messages": messages, **kw}
+                if system_prompt:
+                    params["system"] = system_prompt
+                response = await _aclient.messages.create(**params)
+                return response.content[0].text
+
+            from fastembed import TextEmbedding as _TextEmbedding
+            import numpy as _np
+
+            _embed_model = _TextEmbedding("intfloat/multilingual-e5-large")
+
+            async def _embed_func(texts: list[str]) -> Any:
+                return _np.array(list(_embed_model.embed(texts)))
 
             self._rag = LightRAG(
                 working_dir=str(self._working_dir),
                 llm_model_func=_anthropic_llm,
+                llm_model_name=self._llm_model,
+                embedding_func=EmbeddingFunc(
+                    embedding_dim=1024,
+                    max_token_size=512,
+                    func=_embed_func,
+                ),
                 addon_params={
                     "language": "Turkish",
                     "entity_types": ENTITY_TYPES,
                     "user_prompt": USER_PROMPT,
                 },
             )
+            self._needs_storage_init = True
             self._ready = True
             logger.info("graph_index: LightRAG initialised from %s", self._working_dir)
             return True
@@ -112,6 +135,22 @@ class GraphIndex:
     @property
     def is_ready(self) -> bool:
         return self._ready or self._try_init()
+
+    async def _ensure_storages(self) -> bool:
+        """Initialize storages if not yet done (async step after sync _try_init)."""
+        if not self._ready:
+            return False
+        needs_init = getattr(self, "_needs_storage_init", False)
+        if needs_init:
+            try:
+                await self._rag.initialize_storages()
+                self._needs_storage_init = False
+                logger.info("graph_index: storages initialized")
+            except Exception as exc:
+                logger.warning("graph_index: storage init failed: %s", exc)
+                self._ready = False
+                return False
+        return True
 
     async def query(
         self,
@@ -129,7 +168,7 @@ class GraphIndex:
         Returns:
             List of result dicts with keys: text, path, score, entities.
         """
-        if not self.is_ready:
+        if not await self._ensure_storages():
             return []
         try:
             from lightrag.base import QueryParam
@@ -144,7 +183,9 @@ class GraphIndex:
             logger.warning("graph_index: query failed: %s", exc)
             return []
 
-    async def entity_lookup(self, entity_name: str, top_k: int = 5) -> list[dict[str, Any]]:
+    async def entity_lookup(  # noqa: D102
+        self, entity_name: str, top_k: int = 5
+    ) -> list[dict[str, Any]]:
         """Look up an entity and its related chunks.
 
         Args:
