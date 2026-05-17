@@ -76,11 +76,6 @@ class GraphIndex:
             from lightrag import LightRAG
             from lightrag.llm.anthropic import anthropic_complete
             from lightrag.utils import EmbeddingFunc
-
-            # Use LightRAG's default NanoVectorDB embedding
-            # (separate from vault-mcp's e5-large for FTS)
-            from lightrag.llm.openai import openai_embedding  # fallback
-
             from anthropic import AsyncAnthropic
             _aclient = AsyncAnthropic(api_key=self._api_key)
             _model = self._llm_model
