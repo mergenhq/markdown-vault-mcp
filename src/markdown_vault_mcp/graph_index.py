@@ -63,6 +63,7 @@ class GraphIndex:
         self._llm_model = llm_model
         self._rag: Any = None
         self._ready = False
+        self._needs_storage_init = False
 
     def _try_init(self) -> bool:
         """Attempt to initialize LightRAG. Returns True if ready."""
