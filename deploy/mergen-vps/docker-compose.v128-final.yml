@@ -1,0 +1,52 @@
+# vault-mcp v1.28.0 — Faz 2 CUTOVER compose (NİHAİ). Canlı docker-compose.yml'in
+# yerine geçer. Canlı compose'un BİREBİR aynısı + 3 değişiklik (image, thread-cap,
+# download-link disable). Reuse reçetesi (index.db sil / embeddings koru) = RUNBOOK adımı.
+services:
+  vault-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli-baked.v128-final
+    image: vault-mcp-fastembed-pinned:v1.28-cli-baked
+    container_name: vault-mcp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - /home/mergen/mergen/docs/internal:/vault:ro
+      - /home/mergen/services/vault-mcp/data:/data
+      - /home/mergen/services/vault-mcp/logs:/logs
+      - /home/mergen/services/vault-mcp/model-cache:/home/appuser/.cache
+      # Faz 3: yalniz inbox/wc rw (ro vault ustunde nested mount) — promote out-of-band
+      - /home/mergen/services/vault-mcp/inbox-wc:/vault/inbox/wc
+    env_file:
+      - .env
+    environment:
+      # --- DEĞİŞİKLİK 1: thread-cap (cold-embed thrash emniyeti; reuse'da zaten embed yok) ---
+      - OMP_NUM_THREADS=8
+      - TOKENIZERS_PARALLELISM=false
+      # --- DEĞİŞİKLİK 2: create_download_link gate (exclude-bypass; Faz 2 güvenlik) ---
+      - MARKDOWN_VAULT_MCP_DISABLE_DOWNLOAD_LINK=true
+      - MARKDOWN_VAULT_MCP_WRITE_QUARANTINE_PREFIX=inbox/wc/
+      # --- canlı ile AYNI (drop-in) ---
+      - MARKDOWN_VAULT_MCP_SOURCE_DIR=/vault
+      - MARKDOWN_VAULT_MCP_READ_ONLY=true
+      - MARKDOWN_VAULT_MCP_INDEX_PATH=/data/index.db
+      - MARKDOWN_VAULT_MCP_EMBEDDINGS_PATH=/data/embeddings
+      - FASTEMBED_CACHE_PATH=/data/fastembed-cache
+      - MARKDOWN_VAULT_MCP_INDEXED_FIELDS=tip,statu,tarih
+      - MARKDOWN_VAULT_MCP_EXCLUDE=state/hesap-mimarisi.md,state/pilot-islem-gunlugu.md,state/sermaye-zenginlik-prensibi.md,security/**,seedlings/2026-05-02-guvenlik-mimarisi-haritasi.md,inbox/wc/**
+      - EMBEDDING_PROVIDER=fastembed
+      - MARKDOWN_VAULT_MCP_FASTEMBED_MODEL=intfloat/multilingual-e5-large
+      - MARKDOWN_VAULT_MCP_STATE_PATH=/data/state.json
+      - MARKDOWN_VAULT_MCP_CONTEXTUAL_ENRICHMENT=false
+      - MARKDOWN_VAULT_MCP_CONTEXTUAL_ENRICHMENT_LANGUAGE=Turkish
+      - MARKDOWN_VAULT_MCP_RERANKER_ENABLED=false
+      - MARKDOWN_VAULT_MCP_RERANKER_MODEL=BAAI/bge-reranker-base
+      - MARKDOWN_VAULT_MCP_RERANKER_CANDIDATE_LIMIT=50
+      - MARKDOWN_VAULT_MCP_LOG_LEVEL=INFO
+      - MARKDOWN_VAULT_MCP_BEARER_TOKEN=${VAULT_MCP_BEARER_TOKEN}
+      - MARKDOWN_VAULT_MCP_GITHUB_OAUTH=true
+      - MARKDOWN_VAULT_MCP_GITHUB_CLIENT_ID=Ov23liXYOLJKzX04fZb5
+      - MARKDOWN_VAULT_MCP_GITHUB_CLIENT_SECRET=${MARKDOWN_VAULT_MCP_GITHUB_CLIENT_SECRET}
+      - MARKDOWN_VAULT_MCP_BASE_URL=https://vault.mergenops.com
+    command: markdown-vault-mcp serve --transport http --host 0.0.0.0 --port 8000 --path /mcp

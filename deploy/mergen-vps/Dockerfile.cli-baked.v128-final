@@ -1,0 +1,30 @@
+# vault-mcp v1.28.0 — Faz 2 cutover image (NİHAİ).
+# Taban v1.28.0 = link-graf araçlarını mainline'dan, LLM'siz getirir.
+# Patch seti (minimal, hepsi dry-run + canlı-build kanıtlı):
+#   1. OAuth GitHub spike  → server.py:148 seam (MultiAuth + mergenhq allowlist + bearer)
+#   2. create_download_link gate → _server_tools.py (exclude-bypass; Faz 2 güvenlik)
+# DAHİL DEĞİL: cli.py (ölü patch), fts-injection-fix / e5-prefix-fix
+#   (Görev 4: embeddings REUSE edilir, e5 mean-pooling tutarlı → obsolete kabul;
+#    gerekirse search-kıyas sonrası eklenir).
+FROM ghcr.io/pvliesdonk/markdown-vault-mcp:v1.28.0
+USER root
+
+# 1) OAuth shim modülü + enjeksiyon (idempotent + anchor==1 + py_compile)
+COPY --chown=appuser:appuser patches/_oauth_github_spike.py /app/src/markdown_vault_mcp/_oauth_github_spike.py
+COPY oauth-github-inject-v128.py /tmp/oauth-github-inject-v128.py
+RUN python /tmp/oauth-github-inject-v128.py
+
+# 2) create_download_link gate (env: MARKDOWN_VAULT_MCP_DISABLE_DOWNLOAD_LINK=true)
+COPY download-gate-inject-v128.py /tmp/download-gate-inject-v128.py
+RUN python /tmp/download-gate-inject-v128.py
+
+# 3) Faz 3: scoped quarantine write-back (env: MARKDOWN_VAULT_MCP_WRITE_QUARANTINE_PREFIX)
+COPY --chown=appuser:appuser patches/_quarantine_write.py /app/src/markdown_vault_mcp/_quarantine_write.py
+COPY quarantine-write-inject-v128.py /tmp/quarantine-write-inject-v128.py
+RUN python /tmp/quarantine-write-inject-v128.py
+
+# Patch sonrası bayat bytecode temizliği
+RUN rm -f /app/src/markdown_vault_mcp/__pycache__/server.cpython-312.pyc \
+          /app/src/markdown_vault_mcp/__pycache__/_server_tools.cpython-312.pyc
+
+# Trailing USER YOK: base /usr/local/bin/docker-entrypoint.sh (gosu) ile appuser'a düşer.
